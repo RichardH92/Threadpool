@@ -2,6 +2,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include <semaphore.h>
 #include "list.h"
 #include "threadpool.h"
@@ -107,8 +108,6 @@ static void waitHelper(struct thread_pool *pool) {
 /*
  * Helper function to execute a future, and then store its
  * result
- * 
- * TODO: Implement this function
  */
 static void futureHelper(struct thread_pool *pool) {
   int rc = pthread_mutex_lock(&pool->mutex);
@@ -121,20 +120,43 @@ static void futureHelper(struct thread_pool *pool) {
   rc = pthread_mutex_unlock(&pool->mutex);
   checkResults("pthread_mutex_unlock()\n", rc);
   
-  //TODO: Execute future here, update result
-  tempFuture->result = NULL;
-  
-      
+  //Execute that future and store its result
+  sem_wait(&tempFuture->semaphore);
+  tempFuture->result = (*tempFuture->callable)(tempFuture->callable_data);
+  sem_post(&tempFuture->semaphore);     
 }
    
 void thread_pool_shutdown(struct thread_pool * pool) {
+  int rc = pthread_mutex_lock(&pool->mutex);
+  checkResults("pthread_mutex_lock()\n", rc);
   
+  pool->shutDown = true;
+  
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc);
+  
+  /*struct list_elem *e;
+  struct future *tempFuture
+  
+  while(!list_empty(&pool->futureList)) {
+      e = list_pop_front(&pool->futureList);
+      tempFuture = list_entry(e, struct future, elem);
+      future_free(tempFuture);
+  }*/
+  
+  assert(list_empty(&pool->futureList));
+  
+  pthread_mutex_destroy(&pool->mutex);
+  pthread_cond_destroy(&pool->monitor);
+  free(pool);
+  
+  exit(1);
 }
 
 struct future * thread_pool_submit(struct thread_pool * pool,
 				   thread_pool_callable_func_t callable,
 				   void * callable_data) {
-  const int INIT_VAL = 5;
+  const int INIT_VAL = 1;
   
   struct future *newFuture = malloc(sizeof(struct future));
   newFuture->callable = callable;
@@ -148,10 +170,27 @@ struct future * thread_pool_submit(struct thread_pool * pool,
   return newFuture;
 }
 
-void * future_get(struct future * fut) {
-  return 0;
+void * future_get(struct future * future) {
+  void *temp = NULL;
+  
+  while(temp == NULL) {
+    sem_wait(&future->semaphore);
+    temp = future->result;
+    sem_post(&future->semaphore);
+  }
+  
+  return temp;
 }
 
-void future_free(struct future * fut) {
+void future_free(struct future * future) {
+  int val = 0;
+  while(val != 1) {
+    sem_wait(&future->semaphore);
+    sem_getvalue(&future->semaphore, &val);
+    sem_post(&future->semaphore);
+    val++;
+  }
   
+  sem_destroy(&future->semaphore);
+  free(future);
 }
