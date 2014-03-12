@@ -14,6 +14,8 @@
 }
 
 static void *threadCreateHelper(void *temp);
+static void waitHelper(struct thread_pool *pool);
+static void futureHelper(struct future *future);
 
 struct thread_pool {
   struct list futureList;
@@ -27,6 +29,7 @@ struct future {
   void *callable_data;
   void *result;
   sem_t semaphore;
+  struct list_elem elem;
 };
 
 /*
@@ -65,21 +68,64 @@ struct thread_pool * thread_pool_new(int nthreads) {
 static void *threadCreateHelper(void *temp) {
   //Typecast 
   struct thread_pool *pool = (struct thread_pool *) temp;
-  int rc = pthread_mutex_lock(&pool->mutex);
-  checkResults("pthread_mutex_lock()\n", rc);
 
-  //Wait until a future is added
-  rc = pthread_cond_wait(&pool->monitor, &pool->mutex);
+  while(!pool->shutDown) {
+    int rc = pthread_mutex_lock(&pool->mutex);
+    checkResults("pthread_mutex_lock()\n", rc);
+    
+    //Wait until a future is added
+    waitHelper(pool);
+    
+    //Get the future
+    struct list_elem *e = list_pop_front(&pool->futureList);
+    struct future *tempFuture = list_entry(e, struct future, elem);
+    
+    //Execute the future
+    futureHelper(tempFuture);
+    
+    rc = pthread_mutex_unlock(&pool->mutex);
+    checkResults("pthread_mutex_unlock()\n", rc);
+    
+    //While there are futures waiting to execute
+    while(!list_empty(&pool->futureList)) {
+      //Get another future
+      e = list_pop_front(&pool->futureList);
+      tempFuture = list_entry(e, struct future, elem);
+      
+      //Execute it
+      futureHelper(tempFuture);
+    }
+    
+    rc = pthread_mutex_unlock(&pool->mutex);
+    checkResults("pthread_mutex_unlock()\n", rc);
+  }
+  
+  return NULL;
+}
+
+/*
+ * Helper function: calls pthread_cond_wait() and checks it
+ * 
+ * pthread_cond_wait() will unlock the mutex until data is available,
+ * and then it will relock it
+ */
+static void waitHelper(struct thread_pool *pool) {
+  int rc = pthread_cond_wait(&pool->monitor, &pool->mutex);
   if(rc) {
-    perror("pthread_cond_wait() failed\n");
+    printf("pthread_cond_wait() failed\n");
     pthread_mutex_unlock(&pool->mutex);
     exit(1);
   }
+}
+
+/*
+ * Helper function to execute a future, and then store its
+ * result
+ * 
+ * TODO: Implement this function
+ */
+static void futureHelper(struct future *future) {
   
-  rc = pthread_mutex_unlock(&pool->mutex);
-  checkResults("pthread_mutex_unlock()\n", rc);
-  
-  return NULL;
 }
    
 void thread_pool_shutdown(struct thread_pool * pool) {
@@ -91,14 +137,16 @@ struct future * thread_pool_submit(struct thread_pool * pool,
 				   void * callable_data) {
   const int INIT_VAL = 5;
   
-  struct future *fut = malloc(sizeof(struct future));
-  fut->callable = callable;
-  fut->callable_data = callable_data;
-  sem_init(&fut->semaphore, 0, INIT_VAL);
+  struct future *newFuture = malloc(sizeof(struct future));
+  newFuture->callable = callable;
+  newFuture->callable_data = callable_data;
+  newFuture->result = NULL;
+  sem_init(&newFuture->semaphore, 0, INIT_VAL);
   
-  //TODO: List manipulations here
+  list_push_back(&pool->futureList, &newFuture->elem);
+  pthread_cond_signal(&pool->monitor);    
   
-  return fut;
+  return newFuture;
 }
 
 void * future_get(struct future * fut) {
