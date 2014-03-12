@@ -15,7 +15,7 @@
 
 static void *threadCreateHelper(void *temp);
 static void waitHelper(struct thread_pool *pool);
-static void futureHelper(struct future *future);
+static void futureHelper(struct thread_pool *pool);
 
 struct thread_pool {
   struct list futureList;
@@ -76,24 +76,10 @@ static void *threadCreateHelper(void *temp) {
     //Wait until a future is added
     waitHelper(pool);
     
-    //Get the future
-    struct list_elem *e = list_pop_front(&pool->futureList);
-    struct future *tempFuture = list_entry(e, struct future, elem);
-    
-    //Execute the future
-    futureHelper(tempFuture);
-    
-    rc = pthread_mutex_unlock(&pool->mutex);
-    checkResults("pthread_mutex_unlock()\n", rc);
-    
     //While there are futures waiting to execute
-    while(!list_empty(&pool->futureList)) {
-      //Get another future
-      e = list_pop_front(&pool->futureList);
-      tempFuture = list_entry(e, struct future, elem);
-      
-      //Execute it
-      futureHelper(tempFuture);
+    while(pool != NULL && !list_empty(&pool->futureList)) {
+      //Execute the future
+      futureHelper(pool);
     }
     
     rc = pthread_mutex_unlock(&pool->mutex);
@@ -124,8 +110,21 @@ static void waitHelper(struct thread_pool *pool) {
  * 
  * TODO: Implement this function
  */
-static void futureHelper(struct future *future) {
+static void futureHelper(struct thread_pool *pool) {
+  int rc = pthread_mutex_lock(&pool->mutex);
+  checkResults("pthread_mutex_lock()\n", rc);
   
+  //Get another future
+  struct list_elem *e = list_pop_front(&pool->futureList);
+  struct future *tempFuture = list_entry(e, struct future, elem);
+  
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc);
+  
+  //TODO: Execute future here, update result
+  tempFuture->result = NULL;
+  
+      
 }
    
 void thread_pool_shutdown(struct thread_pool * pool) {
