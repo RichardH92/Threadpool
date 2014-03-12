@@ -37,6 +37,8 @@ struct future {
  * Initializes a new thread_pool of n threads
  */
 struct thread_pool * thread_pool_new(int nthreads) {
+  printf("Test thread_pool_new\n");
+  
   //Dynamically allocate memory for a new thread_pool,
   //and initialize the variables
   struct thread_pool *pool = malloc(sizeof(struct thread_pool));
@@ -50,7 +52,7 @@ struct thread_pool * thread_pool_new(int nthreads) {
   int x = 0;
   int rc = 0;
   for(; x < nthreads; x++) {
-    rc = pthread_create(&threads[x], NULL, threadCreateHelper, NULL);
+    rc = pthread_create(&threads[x], NULL, threadCreateHelper, pool);
     checkResults("pthread_create()\n", rc);
   }
   
@@ -67,8 +69,10 @@ struct thread_pool * thread_pool_new(int nthreads) {
  * until there is a future in futureList for it to execute
  */
 static void *threadCreateHelper(void *temp) {
-  //Typecast 
+  printf("Test threadCreateHelper\n");
+  
   struct thread_pool *pool = (struct thread_pool *) temp;
+  assert(pool != NULL);
 
   while(!pool->shutDown) {
     int rc = pthread_mutex_lock(&pool->mutex);
@@ -97,6 +101,8 @@ static void *threadCreateHelper(void *temp) {
  * and then it will relock it
  */
 static void waitHelper(struct thread_pool *pool) {
+  printf("Test waitHelper\n");
+  
   int rc = pthread_cond_wait(&pool->monitor, &pool->mutex);
   if(rc) {
     printf("pthread_cond_wait() failed\n");
@@ -110,6 +116,8 @@ static void waitHelper(struct thread_pool *pool) {
  * result
  */
 static void futureHelper(struct thread_pool *pool) {
+  printf("Test futureHelper\n");
+  
   int rc = pthread_mutex_lock(&pool->mutex);
   checkResults("pthread_mutex_lock()\n", rc);
   
@@ -127,6 +135,8 @@ static void futureHelper(struct thread_pool *pool) {
 }
    
 void thread_pool_shutdown(struct thread_pool * pool) {
+  printf("Test thread_pool_shutdown\n");
+  
   int rc = pthread_mutex_lock(&pool->mutex);
   checkResults("pthread_mutex_lock()\n", rc);
   
@@ -156,6 +166,8 @@ void thread_pool_shutdown(struct thread_pool * pool) {
 struct future * thread_pool_submit(struct thread_pool * pool,
 				   thread_pool_callable_func_t callable,
 				   void * callable_data) {
+  printf("Test thread_pool_submit\n");
+  
   const int INIT_VAL = 1;
   
   struct future *newFuture = malloc(sizeof(struct future));
@@ -171,6 +183,8 @@ struct future * thread_pool_submit(struct thread_pool * pool,
 }
 
 void * future_get(struct future * future) {
+  printf("Test future_get\n");
+  
   void *temp = NULL;
   
   while(temp == NULL) {
@@ -183,6 +197,8 @@ void * future_get(struct future * future) {
 }
 
 void future_free(struct future * future) {
+  printf("Test future_free\n");
+  
   int val = 0;
   while(val != 1) {
     sem_wait(&future->semaphore);
