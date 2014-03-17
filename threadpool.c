@@ -128,9 +128,12 @@ static void futureHelper(struct thread_pool *pool) {
   rc = pthread_mutex_unlock(&pool->mutex);
   checkResults("pthread_mutex_unlock()\n", rc);
   
+  //printf("Waiting\n");
   //Execute that future and store its result
-  sem_wait(&tempFuture->semaphore);
-  tempFuture->result = (*tempFuture->callable)(tempFuture->callable_data);
+  //sem_wait(&tempFuture->semaphore);
+  printf("Function called\n");
+  tempFuture->result = tempFuture->callable(tempFuture->callable_data);
+  printf("Function returned\n");
   sem_post(&tempFuture->semaphore);     
 }
    
@@ -185,13 +188,21 @@ struct future * thread_pool_submit(struct thread_pool * pool,
 void * future_get(struct future * future) {
   printf("Test future_get\n");
   
+  assert(future != NULL);
   void *temp = NULL;
   
-  while(temp == NULL) {
-    sem_wait(&future->semaphore);
-    temp = future->result;
-    sem_post(&future->semaphore);
-  }
+  //while(temp == NULL) {
+    //printf("temp == NULL\n");
+    //sem_wait(&future->semaphore);
+    //printf("Done waiting in future_get\n");
+    //temp = future->result;
+    //sem_post(&future->semaphore);
+  //}
+    
+    while(temp == NULL) {
+      sem_wait(&future->semaphore);
+      temp = future->result;
+    }
   
   return temp;
 }
@@ -199,8 +210,8 @@ void * future_get(struct future * future) {
 void future_free(struct future * future) {
   printf("Test future_free\n");
   
-  int val = 0;
-  while(val != 1) {
+  int val = -1;
+  while(val != 0) {
     sem_wait(&future->semaphore);
     sem_getvalue(&future->semaphore, &val);
     sem_post(&future->semaphore);
