@@ -128,6 +128,7 @@ void thread_pool_shutdown(struct thread_pool * pool) {
   
   rc = pthread_mutex_unlock(&pool->mutex);
   checkResults("pthread_mutex_unlock()\n", rc);
+  pthread_cond_broadcast(&pool->monitor);
   
   /*struct list_elem *e;
   struct future *tempFuture
@@ -144,7 +145,7 @@ void thread_pool_shutdown(struct thread_pool * pool) {
   pthread_cond_destroy(&pool->monitor);
   free(pool);
   
-  exit(1);
+  //exit(1);
 }
 
 struct future * thread_pool_submit(struct thread_pool * pool,
