@@ -69,25 +69,19 @@ struct thread_pool * thread_pool_new(int nthreads) {
 static void *threadCreateHelper(void *temp) {
   struct thread_pool *pool = (struct thread_pool *) temp;
   assert(pool != NULL);
-
+  
+  int rc = pthread_mutex_lock(&pool->mutex);
+  checkResults("pthread_mutex_lock()\n", rc);
+  
   while(pool != NULL && !pool->shutDown) {
-    int rc = pthread_mutex_lock(&pool->mutex);
-    checkResults("pthread_mutex_lock()\n", rc);
-    
-    //Wait until a future is added
     waitHelper(pool);
     if(pool != NULL && !list_empty(&pool->futureList)) {
       futureHelper(pool);
     }
-    //While there are futures waiting to execute
-    /*while(pool != NULL && !list_empty(&pool->futureList)) {
-      //Execute the future
-      futureHelper(pool);
-    }*/
-    
-    rc = pthread_mutex_unlock(&pool->mutex);
-    checkResults("pthread_mutex_unlock()\n", rc);
   }
+  
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc);
   
   return NULL;
 }
@@ -143,7 +137,7 @@ struct future * thread_pool_submit(struct thread_pool * pool,
 				   thread_pool_callable_func_t callable,
 				   void * callable_data) {
   
-  const int INIT_VAL = 1;
+  const int INIT_VAL = 0;
   
   struct future *newFuture = malloc(sizeof(struct future));
   newFuture->callable = callable;
@@ -161,23 +155,15 @@ void * future_get(struct future * future) {
   assert(future != NULL);
   void *temp = NULL;
 
-  while(temp == NULL) {
+  //while(temp == NULL) {
     sem_wait(&future->semaphore);
     temp = future->result;
-  }
+  //}
   
   return temp;
 }
 
-void future_free(struct future * future) {
-  int val = -1;
-  while(val != 0) {
-    sem_wait(&future->semaphore);
-    sem_getvalue(&future->semaphore, &val);
-    sem_post(&future->semaphore);
-    val++;
-  }
-  
+void future_free(struct future * future) {  
   sem_destroy(&future->semaphore);
   free(future);
 }
