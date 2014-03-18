@@ -76,12 +76,14 @@ static void *threadCreateHelper(void *temp) {
     
     //Wait until a future is added
     waitHelper(pool);
-    
-    //While there are futures waiting to execute
-    while(pool != NULL && !list_empty(&pool->futureList)) {
-      //Execute the future
+    if(pool != NULL && !list_empty(&pool->futureList)) {
       futureHelper(pool);
     }
+    //While there are futures waiting to execute
+    /*while(pool != NULL && !list_empty(&pool->futureList)) {
+      //Execute the future
+      futureHelper(pool);
+    }*/
     
     rc = pthread_mutex_unlock(&pool->mutex);
     checkResults("pthread_mutex_unlock()\n", rc);
@@ -114,7 +116,9 @@ static void waitHelper(struct thread_pool *pool) {
 static void futureHelper(struct thread_pool *pool) {
   //Get another future
   struct list_elem *e = list_pop_front(&pool->futureList);
+  assert(e != NULL);
   struct future *tempFuture = list_entry(e, struct future, elem);
+  assert(tempFuture != NULL);
 
   tempFuture->result = tempFuture->callable(tempFuture->callable_data);
   sem_post(&tempFuture->semaphore);     
@@ -130,29 +134,16 @@ void thread_pool_shutdown(struct thread_pool * pool) {
   checkResults("pthread_mutex_unlock()\n", rc);
   pthread_cond_broadcast(&pool->monitor);
   
-  /*struct list_elem *e;
-  struct future *tempFuture
-  
-  while(!list_empty(&pool->futureList)) {
-      e = list_pop_front(&pool->futureList);
-      tempFuture = list_entry(e, struct future, elem);
-      future_free(tempFuture);
-  }*/
-  
-  //assert(list_empty(&pool->futureList));
-  
   pthread_mutex_destroy(&pool->mutex);
   pthread_cond_destroy(&pool->monitor);
   free(pool);
-  
-  //exit(1);
 }
 
 struct future * thread_pool_submit(struct thread_pool * pool,
 				   thread_pool_callable_func_t callable,
 				   void * callable_data) {
   
-  const int INIT_VAL = 0;
+  const int INIT_VAL = 1;
   
   struct future *newFuture = malloc(sizeof(struct future));
   newFuture->callable = callable;
@@ -169,19 +160,11 @@ struct future * thread_pool_submit(struct thread_pool * pool,
 void * future_get(struct future * future) {
   assert(future != NULL);
   void *temp = NULL;
-  
-  //while(temp == NULL) {
-    //printf("temp == NULL\n");
-    //sem_wait(&future->semaphore);
-    //printf("Done waiting in future_get\n");
-    //temp = future->result;
-    //sem_post(&future->semaphore);
-  //}
-    
-    while(temp == NULL) {
-      sem_wait(&future->semaphore);
-      temp = future->result;
-    }
+
+  while(temp == NULL) {
+    sem_wait(&future->semaphore);
+    temp = future->result;
+  }
   
   return temp;
 }
