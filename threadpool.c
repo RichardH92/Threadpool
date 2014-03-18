@@ -16,7 +16,7 @@
 
 static void *threadCreateHelper(void *temp);
 static void waitHelper(struct thread_pool *pool);
-static void futureHelper(struct thread_pool *pool);
+//static void futureHelper(struct thread_pool *pool);
 
 struct thread_pool {
   struct list futureList;
@@ -69,19 +69,32 @@ struct thread_pool * thread_pool_new(int nthreads) {
 static void *threadCreateHelper(void *temp) {
   struct thread_pool *pool = (struct thread_pool *) temp;
   assert(pool != NULL);
-  
-  int rc = pthread_mutex_lock(&pool->mutex);
-  checkResults("pthread_mutex_lock()\n", rc);
+  struct list_elem *e = NULL;
+  struct future *tempFuture = NULL;
   
   while(pool != NULL && !pool->shutDown) {
+    int rc = pthread_mutex_lock(&pool->mutex);
+    checkResults("pthread_mutex_lock()\n", rc);
     waitHelper(pool);
+    
     if(pool != NULL && !list_empty(&pool->futureList)) {
-      futureHelper(pool);
+      //Get another future
+      e = list_pop_front(&pool->futureList);
+      assert(e != NULL);
+      tempFuture = list_entry(e, struct future, elem);
+      
+      rc = pthread_mutex_unlock(&pool->mutex);
+      checkResults("pthread_mutex_unlock()\n", rc);
+    
+      assert(tempFuture != NULL);
+      tempFuture->result = tempFuture->callable(tempFuture->callable_data);
+      sem_post(&tempFuture->semaphore);    
+    }
+    else {
+      rc = pthread_mutex_unlock(&pool->mutex);
+      checkResults("pthread_mutex_unlock()\n", rc);
     }
   }
-  
-  rc = pthread_mutex_unlock(&pool->mutex);
-  checkResults("pthread_mutex_unlock()\n", rc);
   
   return NULL;
 }
@@ -107,7 +120,7 @@ static void waitHelper(struct thread_pool *pool) {
  * 
  * Should only be called when the mutex is locked
  */
-static void futureHelper(struct thread_pool *pool) {
+/*static void futureHelper(struct thread_pool *pool) {
   //Get another future
   struct list_elem *e = list_pop_front(&pool->futureList);
   assert(e != NULL);
@@ -116,7 +129,7 @@ static void futureHelper(struct thread_pool *pool) {
 
   tempFuture->result = tempFuture->callable(tempFuture->callable_data);
   sem_post(&tempFuture->semaphore);     
-}
+}*/
    
 void thread_pool_shutdown(struct thread_pool * pool) {
   int rc = pthread_mutex_lock(&pool->mutex);
