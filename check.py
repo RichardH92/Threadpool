@@ -9,7 +9,7 @@
 import re, os, sys, subprocess, operator, signal
 
 exe = "./threadpool_test"
-helgrind = ["/home/courses/cs3214/valgrind-3.7.0-install/bin/valgrind", "--tool=helgrind"]
+helgrind = ["/home/richard/Documents/School/CS3214/ThreadpoolNew/Valgrind/bin/valgrind", "--tool=helgrind"]
 
 print "Checking correctness of threadpool exercise."
 print "Compiling..."

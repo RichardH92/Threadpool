@@ -16,7 +16,6 @@
 
 static void *threadCreateHelper(void *temp);
 static void waitHelper(struct thread_pool *pool);
-//static void futureHelper(struct thread_pool *pool);
 
 struct thread_pool {
   struct list futureList;
@@ -74,12 +73,11 @@ static void *threadCreateHelper(void *temp) {
   
   int rc = pthread_mutex_lock(&pool->mutex);
   checkResults("pthread_mutex_lock()\n", rc);
-  //waitHelper(pool);
   
   while(pool != NULL && !pool->shutDown) {
     waitHelper(pool);
     
-    while(pool != NULL && !list_empty(&pool->futureList)) {
+    while(pool != NULL && !list_empty(&pool->futureList) && !pool->shutDown) {
       //Get another future
       e = list_pop_front(&pool->futureList);
       assert(e != NULL);
@@ -117,36 +115,17 @@ static void waitHelper(struct thread_pool *pool) {
     exit(1);
   }
 }
-
-/*
- * Helper function to execute a future, and then store its
- * result
- * 
- * Should only be called when the mutex is locked
- */
-/*static void futureHelper(struct thread_pool *pool) {
-  //Get another future
-  struct list_elem *e = list_pop_front(&pool->futureList);
-  assert(e != NULL);
-  struct future *tempFuture = list_entry(e, struct future, elem);
-  assert(tempFuture != NULL);
-
-  tempFuture->result = tempFuture->callable(tempFuture->callable_data);
-  sem_post(&tempFuture->semaphore);     
-}*/
    
 void thread_pool_shutdown(struct thread_pool * pool) {
   int rc = pthread_mutex_lock(&pool->mutex);
   checkResults("pthread_mutex_lock()\n", rc);
   
   pool->shutDown = true;
-  
-  rc = pthread_mutex_unlock(&pool->mutex);
-  checkResults("pthread_mutex_unlock()\n", rc);
   pthread_cond_broadcast(&pool->monitor);
   
-  pthread_mutex_destroy(&pool->mutex);
-  pthread_cond_destroy(&pool->monitor);
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc); 
+  
   free(pool);
 }
 
@@ -162,8 +141,14 @@ struct future * thread_pool_submit(struct thread_pool * pool,
   newFuture->result = NULL;
   sem_init(&newFuture->semaphore, 0, INIT_VAL);
   
+  int rc = pthread_mutex_lock(&pool->mutex);
+  checkResults("pthread_mutex_lock()\n", rc);
+  
   list_push_back(&pool->futureList, &newFuture->elem);
-  pthread_cond_signal(&pool->monitor);    
+  pthread_cond_signal(&pool->monitor);  
+  
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc);
   
   return newFuture;
 }
@@ -172,10 +157,8 @@ void * future_get(struct future * future) {
   assert(future != NULL);
   void *temp = NULL;
 
-  //while(temp == NULL) {
-    sem_wait(&future->semaphore);
-    temp = future->result;
-  //}
+  sem_wait(&future->semaphore);
+  temp = future->result;
   
   return temp;
 }
