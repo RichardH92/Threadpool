@@ -72,12 +72,14 @@ static void *threadCreateHelper(void *temp) {
   struct list_elem *e = NULL;
   struct future *tempFuture = NULL;
   
+  int rc = pthread_mutex_lock(&pool->mutex);
+  checkResults("pthread_mutex_lock()\n", rc);
+  //waitHelper(pool);
+  
   while(pool != NULL && !pool->shutDown) {
-    int rc = pthread_mutex_lock(&pool->mutex);
-    checkResults("pthread_mutex_lock()\n", rc);
     waitHelper(pool);
     
-    if(pool != NULL && !list_empty(&pool->futureList)) {
+    while(pool != NULL && !list_empty(&pool->futureList)) {
       //Get another future
       e = list_pop_front(&pool->futureList);
       assert(e != NULL);
@@ -88,13 +90,15 @@ static void *threadCreateHelper(void *temp) {
     
       assert(tempFuture != NULL);
       tempFuture->result = tempFuture->callable(tempFuture->callable_data);
-      sem_post(&tempFuture->semaphore);    
-    }
-    else {
-      rc = pthread_mutex_unlock(&pool->mutex);
-      checkResults("pthread_mutex_unlock()\n", rc);
+      sem_post(&tempFuture->semaphore);
+      
+      rc = pthread_mutex_lock(&pool->mutex);
+      checkResults("pthread_mutex_lock()\n", rc);
     }
   }
+  
+  rc = pthread_mutex_unlock(&pool->mutex);
+  checkResults("pthread_mutex_unlock()\n", rc);
   
   return NULL;
 }
